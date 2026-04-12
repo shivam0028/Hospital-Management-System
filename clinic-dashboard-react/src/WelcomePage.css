@@ -1,0 +1,437 @@
+.wc-shell {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  border-radius: 50px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  zoom: 0.82;
+
+  background:
+    radial-gradient(ellipse 90% 70% at 15% 15%, rgba(180, 210, 255, 0.85) 0%, transparent 52%),
+    radial-gradient(ellipse 75% 65% at 85% 80%, rgba(200, 180, 255, 0.75) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 55% at 60% 5%, rgba(140, 220, 245, 0.55) 0%, transparent 48%),
+    radial-gradient(ellipse 50% 45% at 5% 90%, rgba(160, 230, 210, 0.45) 0%, transparent 46%),
+    linear-gradient(145deg, #eef4ff 0%, #e8f0ff 42%, #f2ecff 76%, #edf8f4 100%);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  -webkit-backdrop-filter: blur(28px) saturate(175%);
+  backdrop-filter: blur(28px) saturate(175%);
+  box-shadow:
+    0 42px 90px rgba(49, 46, 129, 0.14),
+    0 18px 30px rgba(15, 23, 42, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.wc-particle-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.wc-bg-grid {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(80, 120, 200, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(80, 120, 200, 0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
+  -webkit-mask-image: radial-gradient(ellipse 90% 85% at 50% 50%, black 25%, transparent 100%);
+  mask-image: radial-gradient(ellipse 90% 85% at 50% 50%, black 25%, transparent 100%);
+}
+
+.wc-cursor-glow {
+  position: fixed;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, rgba(100, 140, 230, 0.16) 0%, rgba(140, 110, 230, 0.08) 42%, transparent 70%);
+  transition: left 0.08s linear, top 0.08s linear;
+}
+
+/* ── orbs ── */
+.wc-orb {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 1;
+  filter: blur(72px);
+}
+
+.wc-orb-one {
+  width: 440px;
+  height: 440px;
+  top: -110px;
+  left: -110px;
+  background: radial-gradient(circle, rgba(120, 180, 255, 0.62), transparent 68%);
+  animation: orbFloat1 12s ease-in-out infinite;
+}
+
+.wc-orb-two {
+  width: 360px;
+  height: 360px;
+  bottom: -90px;
+  right: -65px;
+  background: radial-gradient(circle, rgba(175, 140, 255, 0.56), transparent 68%);
+  animation: orbFloat2 15s ease-in-out infinite;
+}
+
+.wc-orb-three {
+  width: 250px;
+  height: 250px;
+  top: 36%;
+  left: 54%;
+  background: radial-gradient(circle, rgba(80, 210, 225, 0.42), transparent 68%);
+  animation: orbFloat3 9s ease-in-out infinite;
+}
+
+@keyframes orbFloat1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%       { transform: translate(26px, 34px) scale(1.07); }
+}
+@keyframes orbFloat2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%       { transform: translate(-22px, -26px) scale(1.06); }
+}
+@keyframes orbFloat3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%       { transform: translate(14px, -18px) scale(1.1); }
+}
+
+/* ── layout ── */
+.wc-layout {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 0 1.5rem;
+}
+
+.wc-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: min(100%, 1200px);
+  gap: 1rem;
+  padding: 1.5rem;
+  border-radius: 30px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.56), rgba(255, 255, 255, 0.16));
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  -webkit-backdrop-filter: blur(26px) saturate(165%);
+  backdrop-filter: blur(26px) saturate(165%);
+  box-shadow:
+    0 34px 72px rgba(5, 12, 36, 0.48),
+    0 18px 36px rgba(8, 18, 44, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+/* ── pill badge ── */
+.wc-subtitle-top {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Apple uses rgba(255,255,255,0.25) + blur(20px) for Control Center tiles */
+.wc-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.38rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
+  border: 0.5px solid rgba(255, 255, 255, 0.75);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  color: #1c3d70;
+  font: 600 0.73rem/1 'Sora', sans-serif;
+  letter-spacing: 0.05rem;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 2px 10px rgba(60, 90, 160, 0.16);
+}
+
+/* ── "Welcome to" title ── */
+.wc-title-wrap { overflow: visible; }
+
+.wc-title-small {
+  margin: 0;
+  font: 700 clamp(1rem, 2vw, 1.65rem)/1.2 'Fraunces', Georgia, serif;
+  color: #334e80;
+  letter-spacing: -0.02rem;
+}
+
+/* ── hospital name card — Apple "thick material" ── */
+.wc-hospital-name-wrap {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+/* Apple's thick material: rgba(255,255,255,0.72) + blur(40-60px) + saturate(180%) */
+.wc-hospital-name-card {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  padding: 0.7rem 2rem;
+  border-radius: 20px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.58), rgba(255, 255, 255, 0.2));
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  -webkit-backdrop-filter: blur(30px) saturate(180%) brightness(1.04);
+  backdrop-filter: blur(30px) saturate(180%) brightness(1.04);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 rgba(100, 130, 200, 0.12),
+    0 14px 30px rgba(49, 46, 129, 0.2),
+    0 6px 14px rgba(15, 23, 42, 0.16);
+}
+
+/* shimmer — Apple glass edge highlight sweep */
+.wc-hospital-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.18) 42%,
+    rgba(255, 255, 255, 0.34) 50%,
+    transparent 58%
+  );
+  background-size: 220% 100%;
+  animation: shimmerSlide 3.6s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes shimmerSlide {
+  0%   { background-position: -100% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.wc-hospital-text {
+  position: relative;
+  z-index: 1;
+  font: 800 clamp(1.9rem, 4.5vw, 3.8rem)/1 'Fraunces', Georgia, serif;
+  letter-spacing: -0.03rem;
+  background: linear-gradient(
+    135deg,
+    #0a2d7a 0%,
+    #1a55c0 30%,
+    #4a30b8 56%,
+    #0778a0 80%,
+    #0a2d7a 100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 1px 8px rgba(30, 70, 180, 0.22));
+}
+
+/* ── lead text ── */
+.wc-lead {
+  margin: 0;
+  color: #2e4f7c;
+  font: 500 0.86rem/1.55 'Sora', sans-serif;
+  max-width: 48ch;
+}
+
+/* ── buttons ── */
+.wc-btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  justify-content: center;
+}
+
+/* Apple button: rgba(255,255,255,~0.3) base, 0.5px white border, blur(20px) */
+.wc-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: none;
+  border-radius: 13px;
+  padding: 0.68rem 1.3rem;
+  font: 700 0.88rem/1 'Sora', sans-serif;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: box-shadow 180ms ease, transform 180ms ease;
+  will-change: transform;
+}
+
+.wc-btn-primary {
+  background: rgba(25, 75, 195, 0.80);
+  color: #fff;
+  border: 0.5px solid rgba(255, 255, 255, 0.35);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.30),
+    0 8px 22px rgba(20, 70, 190, 0.40),
+    0 3px 8px rgba(20, 70, 190, 0.26);
+}
+
+.wc-btn-primary:hover {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.38),
+    0 14px 34px rgba(20, 70, 190, 0.52),
+    0 5px 12px rgba(20, 70, 190, 0.34);
+}
+
+/* Apple secondary — pure white glass */
+.wc-btn-secondary {
+  background: rgba(255, 255, 255, 0.38);
+  color: #1a3870;
+  border: 0.5px solid rgba(255, 255, 255, 0.88);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  backdrop-filter: blur(30px) saturate(180%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 rgba(100, 130, 200, 0.12),
+    0 4px 14px rgba(50, 80, 150, 0.18);
+}
+
+.wc-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.56);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -1px 0 rgba(100, 130, 200, 0.16),
+    0 7px 20px rgba(50, 80, 150, 0.24);
+}
+
+.wc-btn-arrow {
+  display: inline-block;
+  transition: transform 180ms ease;
+}
+
+.wc-btn-primary:hover .wc-btn-arrow {
+  transform: translateX(4px);
+}
+
+/* ── feature cards — Apple thin material ── */
+/* Apple thin material: rgba(255,255,255,0.2) + blur(20px) */
+.wc-cards-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.5rem;
+  width: 100%;
+}
+
+.wc-feature-card {
+  width: 100%;
+  padding: 1.9rem 1.8rem;
+  min-height: 240px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.28);
+  border: 0.5px solid rgba(255, 255, 255, 0.80);
+  -webkit-backdrop-filter: blur(30px) saturate(180%) brightness(1.04);
+  backdrop-filter: blur(30px) saturate(180%) brightness(1.04);
+  text-align: left;
+  cursor: default;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.90),
+    inset 0 -1px 0 rgba(100, 130, 200, 0.10),
+    0 6px 18px rgba(20, 28, 55, 0.16);
+  transition: background 200ms ease, box-shadow 200ms ease;
+}
+
+.wc-feature-card:hover {
+  cursor: default;
+  background: rgba(255, 255, 255, 0.45);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.98),
+    inset 0 -1px 0 rgba(100, 130, 200, 0.14),
+    0 12px 28px rgba(40, 65, 140, 0.22);
+}
+
+.wc-feature-card-action,
+.wc-feature-card-action:hover {
+  cursor: pointer;
+}
+
+.wc-feature-card-action:focus-visible {
+  outline: 2px solid rgba(28, 85, 192, 0.65);
+  outline-offset: 2px;
+}
+
+.wc-card-icon {
+  font-size: 1.45rem;
+  display: block;
+  margin-bottom: 0.55rem;
+}
+
+.wc-card-title {
+  margin: 0 0 0.35rem;
+  color: #0e2548;
+  font: 700 0.98rem/1.2 'Sora', sans-serif;
+}
+
+.wc-card-desc {
+  margin: 0;
+  color: #2e4f7c;
+  font: 500 0.88rem/1.48 'Sora', sans-serif;
+}
+
+/* ── 3D wireframe cube ── */
+.wc-3d-cube-container {
+  position: absolute;
+  right: 5%;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 150px;
+  height: 150px;
+  z-index: 3;
+  opacity: 0.18;
+  pointer-events: none;
+  perspective: 600px;
+  transform-style: preserve-3d;
+}
+
+.wc-cube {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  transform: rotateX(28deg);
+}
+
+.wc-face {
+  position: absolute;
+  width: 150px;
+  height: 150px;
+  border: 1px solid rgba(70, 110, 200, 0.32);
+  border-radius: 6px;
+  background: rgba(200, 220, 255, 0.08);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+
+.wc-face-front  { transform: translateZ(75px); }
+.wc-face-back   { transform: rotateY(180deg) translateZ(75px); }
+.wc-face-left   { transform: rotateY(-90deg) translateZ(75px); }
+.wc-face-right  { transform: rotateY(90deg) translateZ(75px); }
+.wc-face-top    { transform: rotateX(90deg) translateZ(75px); }
+.wc-face-bottom { transform: rotateX(-90deg) translateZ(75px); }
+
+/* ── responsive ── */
+@media (max-width: 720px) {
+  .wc-cards-row { grid-template-columns: 1fr; }
+  .wc-3d-cube-container { display: none; }
+  .wc-hospital-name-card { padding: 0.6rem 1.3rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wc-orb-one, .wc-orb-two, .wc-orb-three, .wc-hospital-shimmer { animation: none; }
+}
