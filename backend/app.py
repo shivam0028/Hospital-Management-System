@@ -297,6 +297,10 @@ def delete_appointment(patient_id: str):
         if deleted is None:
             return jsonify({'error': 'Appointment not found'}), 404
         return jsonify({'message': 'Appointment deleted successfully'})
+    
+    @app.route('/api/health')
+    def health_check():
+        return jsonify({'status': 'healthy'})
 
 
 if __name__ == '__main__':
