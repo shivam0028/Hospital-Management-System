@@ -3,7 +3,7 @@
 ##  Overview
 
 The Hospital Management System (HMS) is a full-stack web application designed to manage hospital operations efficiently.
-It includes modules for patients, doctors, appointments, billing, and medical records.
+It includes modules for patients, doctors, appointments, billing.
 
 This project is built using **React (Frontend)** and **Node.js / Backend (API)**.
 
