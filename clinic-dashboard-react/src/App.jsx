@@ -14,7 +14,8 @@ import './App.css'
 
 const Lottie = LottieModule.default ?? LottieModule
 
-const API_BASE = '/api'
+// const API_BASE = '/api'
+const API_BASE = "https://hospital-backend-obzv.onrender.com/api"
 
 const emptyPatientForm = {
   mobile: '',
