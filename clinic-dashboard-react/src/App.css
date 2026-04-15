@@ -941,6 +941,39 @@
   letter-spacing: 0.12em;
 }
 
+.password-input-row {
+  position: relative;
+}
+
+.password-input-row input {
+  padding-right: 5.3rem;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 0.45rem;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 1px solid rgba(23, 58, 83, 0.22);
+  background: rgba(255, 255, 255, 0.92);
+  color: #12344d;
+  border-radius: 10px;
+  font: 700 0.74rem/1 var(--font-body);
+  letter-spacing: 0.02rem;
+  padding: 0.42rem 0.62rem;
+  cursor: pointer;
+  box-shadow: 0 6px 14px rgba(18, 52, 77, 0.08);
+}
+
+.password-toggle:hover {
+  background: #ffffff;
+}
+
+.password-toggle:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.5);
+  outline-offset: 1px;
+}
+
 .auth-form .action-row {
   position: relative;
   z-index: 1;

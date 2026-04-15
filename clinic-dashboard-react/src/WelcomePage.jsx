@@ -192,8 +192,14 @@ const FEATURE_CARDS = [
   { icon: '📊', title: 'Live Dashboard', desc: 'Stats and activity at a glance' },
 ]
 
-export default function WelcomePage({ onEnterDashboard, onGoToPatients, onGoToSavedPatients, onGoToSavedAppointments, onGoToDashboardStats }) {
-  const titleChars = 'Welcome to'.split('')
+const PUBLIC_FEATURE_CARDS = [
+  { icon: '🔐', title: 'Patient Login', desc: 'Access your account and view all previous forms' },
+  { icon: '📝', title: 'New Form Anytime', desc: 'Submit new health details whenever you need' },
+  { icon: '🧾', title: 'History Tracking', desc: 'See all your past submissions in one place' },
+]
+
+export default function WelcomePage({ onEnterDashboard, onGoToPatients, onGoToSavedPatients, onGoToSavedAppointments, onGoToDashboardStats, onGoToClientAccess, onGoToAdminLogin, isPublic }) {
+  const titleChars = isPublic ? 'Welcome'.split('') : 'Welcome to'.split('')
 
   return (
     <motion.main
@@ -249,25 +255,41 @@ export default function WelcomePage({ onEnterDashboard, onGoToPatients, onGoToSa
           </motion.div>
 
           <motion.p className="wc-lead" variants={itemMotion}>
-            Streamlined care for patients, doctors, and staff — all in one place.
+            {isPublic ? 'Patients can log in, view past records, and submit new forms without retyping everything.' : 'Streamlined care for patients, doctors, and staff — all in one place.'}
           </motion.p>
 
           <motion.div className="wc-btn-row" variants={itemMotion}>
-            <MagneticButton className="wc-btn wc-btn-primary" onClick={onEnterDashboard}>
-              <span>Enter Dashboard</span>
-              <span className="wc-btn-arrow">→</span>
-            </MagneticButton>
-            <MagneticButton className="wc-btn wc-btn-secondary" onClick={onGoToPatients}>
-              <span>View Patients</span>
-            </MagneticButton>
+            {isPublic ? (
+              <>
+                <MagneticButton className="wc-btn wc-btn-primary" onClick={onGoToAdminLogin}>
+                  <span>Login</span>
+                  <span className="wc-btn-arrow">→</span>
+                </MagneticButton>
+                <MagneticButton className="wc-btn wc-btn-secondary" onClick={onGoToAdminLogin}>
+                  <span>Sign Up</span>
+                </MagneticButton>
+              </>
+            ) : (
+              <>
+                <MagneticButton className="wc-btn wc-btn-primary" onClick={onEnterDashboard}>
+                  <span>Enter Dashboard</span>
+                  <span className="wc-btn-arrow">→</span>
+                </MagneticButton>
+                <MagneticButton className="wc-btn wc-btn-secondary" onClick={onGoToPatients}>
+                  <span>View Patients</span>
+                </MagneticButton>
+              </>
+            )}
           </motion.div>
 
           <motion.div className="wc-cards-row" variants={staggerMotion} initial="hidden" animate="show">
-            {FEATURE_CARDS.map((card) => {
+            {(isPublic ? PUBLIC_FEATURE_CARDS : FEATURE_CARDS).map((card) => {
               let cardOnClick = undefined
-              if (card.title === 'Patient Records') cardOnClick = onGoToSavedPatients
-              if (card.title === 'Appointments') cardOnClick = onGoToSavedAppointments
-              if (card.title === 'Live Dashboard') cardOnClick = onGoToDashboardStats
+              if (!isPublic) {
+                if (card.title === 'Patient Records') cardOnClick = onGoToSavedPatients
+                if (card.title === 'Appointments') cardOnClick = onGoToSavedAppointments
+                if (card.title === 'Live Dashboard') cardOnClick = onGoToDashboardStats
+              }
               
               return (
                 <TiltCard

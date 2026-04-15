@@ -3,6 +3,8 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import gsap from 'gsap'
 import LottieModule from 'lottie-react'
 import WelcomePage from './WelcomePage'
+import ClientAccessPage from './ClientAccessPage'
+import PublicPatientIntake from './PublicPatientIntake'
 import SavedPatientsPanel from './SavedPatientsPanel'
 import SavedAppointmentsPanel from './SavedAppointmentsPanel'
 import DashboardStats from './DashboardStats'
@@ -17,6 +19,8 @@ const Lottie = LottieModule.default ?? LottieModule
 const API_BASE = '/api'
 const AUTH_TOKEN_STORAGE_KEY = 'clinic-dashboard-auth-token'
 const AUTH_USER_STORAGE_KEY = 'clinic-dashboard-auth-user'
+const CLIENT_TOKEN_STORAGE_KEY = 'clinic-dashboard-client-token'
+const CLIENT_MOBILE_STORAGE_KEY = 'clinic-dashboard-client-mobile'
 
 const emptyPatientForm = {
   mobile: '',
@@ -69,31 +73,6 @@ const itemMotion = {
   show: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.5, ease: 'easeOut' } },
 }
 
-const formatDateForInput = (value) => {
-  if (!value) {
-    return ''
-  }
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return value
-  }
-
-  const parts = value.split(/[\/.-]/).map((segment) => segment.trim())
-  if (parts.length !== 3) {
-    return value
-  }
-
-  const [first, second, third] = parts
-  if (third.length !== 4) {
-    return value
-  }
-
-  const year = third
-  const month = second.padStart(2, '0')
-  const day = first.padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
 const parseResponseBody = async (response) => {
   const rawBody = await response.text()
 
@@ -120,6 +99,7 @@ function App() {
   const [authLoading, setAuthLoading] = useState(true)
   const [authError, setAuthError] = useState('')
   const [loginForm, setLoginForm] = useState(defaultLoginForm)
+  const [showLoginPassword, setShowLoginPassword] = useState(false)
   const [authenticating, setAuthenticating] = useState(false)
   const [patients, setPatients] = useState([])
   const [appointments, setAppointments] = useState([])
@@ -131,7 +111,6 @@ function App() {
   const [paymentForm, setPaymentForm] = useState(defaultPaymentForm)
   const [receiptData, setReceiptData] = useState(null)
   const [selectedAppointment, setSelectedAppointment] = useState(null)
-  const [editingPatient, setEditingPatient] = useState(null)
   const [savingPatient, setSavingPatient] = useState(false)
   const [savingAppointment, setSavingAppointment] = useState(false)
   const prefersReducedMotion = useReducedMotion()
@@ -152,7 +131,6 @@ function App() {
     setPendingAppointment(null)
     setReceiptData(null)
     setSelectedAppointment(null)
-    setEditingPatient(null)
     setPatientForm(emptyPatientForm)
     setAppointmentForm(emptyAppointmentForm)
     setPaymentForm(defaultPaymentForm)
@@ -224,6 +202,7 @@ function App() {
       if (!storedAuth.token) {
         if (!cancelled) {
           setAuthLoading(false)
+          setView('publicHome')
         }
         return
       }
@@ -270,11 +249,15 @@ function App() {
       setLoading(false)
       setPatients([])
       setAppointments([])
+      const publicViews = new Set(['publicHome', 'publicIntake', 'clientAccess', 'welcome'])
+      if (!publicViews.has(view)) {
+        setView('publicHome')
+      }
       return
     }
 
     window.scrollTo(0, 0)
-  }, [authToken])
+  }, [authToken, view])
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -336,7 +319,6 @@ function App() {
 
   const resetPatientForm = () => {
     setPatientForm(emptyPatientForm)
-    setEditingPatient(null)
   }
 
   const resetAppointmentForm = () => {
@@ -354,11 +336,11 @@ function App() {
   }
 
   const signIn = async () => {
-    const username = loginForm.username.trim()
+    const identifier = loginForm.username.trim()
     const password = loginForm.password
 
-    if (!username || !password) {
-      setAuthError('Enter both username and password.')
+    if (!identifier || !password) {
+      setAuthError('Enter both username/mobile and password.')
       return
     }
 
@@ -366,28 +348,98 @@ function App() {
     setAuthError('')
 
     try {
-      const response = await fetch(`${API_BASE}/auth/login`, {
+      const adminResponse = await fetch(`${API_BASE}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username: 'admin', password }),
+      })
+      const adminData = await parseResponseBody(adminResponse)
+
+      if (adminResponse.ok) {
+        const token = adminData.token || ''
+        const signedInUser = adminData.user?.username || identifier
+
+        window.localStorage.removeItem(CLIENT_TOKEN_STORAGE_KEY)
+        window.localStorage.removeItem(CLIENT_MOBILE_STORAGE_KEY)
+        window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token)
+        window.localStorage.setItem(AUTH_USER_STORAGE_KEY, signedInUser)
+        setAuthToken(token)
+        setAuthUser(signedInUser)
+        setView('welcome')
+        await loadData(token)
+        return
+      }
+
+      const clientResponse = await fetch(`${API_BASE}/client/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mobile: identifier, password }),
+      })
+      const clientData = await parseResponseBody(clientResponse)
+
+      if (!clientResponse.ok) {
+        if (clientResponse.status === 404 || clientResponse.status === 401) {
+          throw new Error('Account not found. Please click Sign Up first to create your account.')
+        }
+        throw new Error(clientData.error || adminData.error || 'Unable to sign in')
+      }
+
+      const clientToken = clientData.token || ''
+      const clientMobile = clientData.client?.mobile || identifier
+
+      window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY)
+      window.localStorage.removeItem(AUTH_USER_STORAGE_KEY)
+      window.localStorage.setItem(CLIENT_TOKEN_STORAGE_KEY, clientToken)
+      window.localStorage.setItem(CLIENT_MOBILE_STORAGE_KEY, clientMobile)
+      setAuthToken('')
+      setAuthUser('')
+      setView('clientAccess')
+    } catch (loginError) {
+      setAuthError(loginError.message || 'Unable to sign in')
+    } finally {
+      setAuthenticating(false)
+    }
+  }
+
+  const signUpClient = async () => {
+    const mobile = loginForm.username.trim()
+    const password = loginForm.password
+
+    if (!mobile || !password) {
+      setAuthError('Enter mobile and password to sign up.')
+      return
+    }
+
+    setAuthenticating(true)
+    setAuthError('')
+
+    try {
+      const response = await fetch(`${API_BASE}/client/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mobile, password, name: mobile }),
       })
       const data = await parseResponseBody(response)
 
       if (!response.ok) {
-        throw new Error(data.error || 'Unable to sign in')
+        if (response.status === 409) {
+          throw new Error('Account already exists. Please click Login.')
+        }
+        throw new Error(data.error || 'Unable to create account')
       }
 
-      const token = data.token || ''
-      const signedInUser = data.user?.username || username
+      const clientToken = data.token || ''
+      const clientMobile = data.client?.mobile || mobile
 
-      window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token)
-      window.localStorage.setItem(AUTH_USER_STORAGE_KEY, signedInUser)
-      setAuthToken(token)
-      setAuthUser(signedInUser)
-      setView('welcome')
-      await loadData(token)
-    } catch (loginError) {
-      setAuthError(loginError.message || 'Unable to sign in')
+      window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY)
+      window.localStorage.removeItem(AUTH_USER_STORAGE_KEY)
+      window.localStorage.setItem(CLIENT_TOKEN_STORAGE_KEY, clientToken)
+      window.localStorage.setItem(CLIENT_MOBILE_STORAGE_KEY, clientMobile)
+      setAuthToken('')
+      setAuthUser('')
+      setView('clientAccess')
+    } catch (signupError) {
+      setAuthError(signupError.message || 'Unable to create account')
     } finally {
       setAuthenticating(false)
     }
@@ -412,9 +464,9 @@ function App() {
 
     try {
       const response = await apiFetch(
-        editingPatient ? `${API_BASE}/patients/${editingPatient}` : `${API_BASE}/patients`,
+        `${API_BASE}/patients`,
         {
-          method: editingPatient ? 'PUT' : 'POST',
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         },
@@ -438,18 +490,6 @@ function App() {
     } finally {
       setSavingPatient(false)
     }
-  }
-
-  const editPatient = (patient) => {
-    setEditingPatient(patient.MOBILE)
-    setPatientForm({
-      mobile: patient.MOBILE || '',
-      name: patient.NAME || '',
-      dob: formatDateForInput(patient.DOB),
-      history: patient.HISTORY || '',
-      medicines: patient.MEDICINES || '',
-    })
-    setView('patients')
   }
 
   const deletePatient = async (mobile) => {
@@ -756,8 +796,8 @@ function App() {
       <section className="detail-grid">
         <article className="detail-panel detail-panel-green">
           <div className="section-heading">
-            <h2>{editingPatient ? 'Edit Patient' : 'Patient Form'}</h2>
-            <span>{editingPatient ? `Now editing ${editingPatient}` : 'Add new'}</span>
+            <h2>Patient Intake Form</h2>
+            <span>Saved records are locked for editing</span>
           </div>
 
           <div className="record-form">
@@ -808,7 +848,7 @@ function App() {
 
           <div className="action-row">
             <button type="button" onClick={savePatient} disabled={savingPatient}>
-              {savingPatient ? 'Saving...' : editingPatient ? 'Update Record' : 'Save Record'}
+              {savingPatient ? 'Saving...' : 'Save Record'}
             </button>
             <button type="button" className="secondary-button" onClick={resetPatientForm}>
               Clear Form
@@ -816,7 +856,7 @@ function App() {
           </div>
         </article>
 
-        <SavedPatientsPanel patients={patients} onEditPatient={editPatient} onDeletePatient={deletePatient} />
+        <SavedPatientsPanel patients={patients} onDeletePatient={deletePatient} />
       </section>
     </motion.main>
   )
@@ -858,7 +898,7 @@ function App() {
       </section>
 
       <section className="detail-grid detail-grid-single">
-        <SavedPatientsPanel patients={patients} onEditPatient={editPatient} onDeletePatient={deletePatient} />
+        <SavedPatientsPanel patients={patients} onDeletePatient={deletePatient} />
       </section>
     </motion.main>
   )
@@ -1124,51 +1164,77 @@ function App() {
     >
       <section className="auth-panel">
         <p className="kicker kicker-accent">Secure access</p>
-        <h1>Sign in to manage clinic records</h1>
+        <h1>Sign in as Admin or Patient</h1>
         <p className="lead">
-          Patient and appointment changes are restricted to authenticated staff.
+          Use Login for existing accounts. Use Sign Up to create a new patient account.
         </p>
 
         {authError ? <div className="notice notice-error">{authError}</div> : null}
 
         <div className="record-form auth-form">
           <label>
-            Username
+            Username or Mobile
             <input
               type="text"
-              placeholder="Enter username"
+              placeholder="Enter admin username or patient mobile"
               value={loginForm.username}
               onChange={(event) => setLoginForm({ ...loginForm, username: event.target.value })}
             />
           </label>
           <label>
             Password
-            <input
-              type="password"
-              placeholder="Enter password"
-              value={loginForm.password}
-              onChange={(event) => setLoginForm({ ...loginForm, password: event.target.value })}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  void signIn()
-                }
-              }}
-            />
+            <div className="password-input-row">
+              <input
+                type={showLoginPassword ? 'text' : 'password'}
+                placeholder="Enter password"
+                value={loginForm.password}
+                onChange={(event) => setLoginForm({ ...loginForm, password: event.target.value })}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    void signIn()
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="password-toggle"
+                onClick={() => setShowLoginPassword((prev) => !prev)}
+                aria-label={showLoginPassword ? 'Hide password' : 'Show password'}
+              >
+                {showLoginPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
           </label>
         </div>
 
         <div className="action-row">
           <button type="button" onClick={() => void signIn()} disabled={authenticating}>
-            {authenticating ? 'Signing in...' : 'Sign in'}
+            {authenticating ? 'Please wait...' : 'Login'}
+          </button>
+          <button type="button" className="secondary-button" onClick={() => void signUpClient()} disabled={authenticating}>
+            {authenticating ? 'Please wait...' : 'Sign Up'}
           </button>
         </div>
       </section>
     </motion.main>
   )
 
+  const renderPublicIntake = () => (
+    <PublicPatientIntake
+      onGoHome={() => navigateToView('publicHome')}
+      onGoAdminDashboard={() => navigateToView('welcome')}
+    />
+  )
+
+  const renderClientAccess = () => (
+    <ClientAccessPage
+      onBackHome={() => navigateToView('publicHome')}
+    />
+  )
+
   return (
-    <div className={`page ${view === 'welcome' ? 'page-welcome' : view === 'dashboard' ? 'page-dashboard' : 'page-detail'}`}>
+    <div className={`page ${view === 'publicHome' || view === 'welcome' ? 'page-welcome' : view === 'dashboard' ? 'page-dashboard' : 'page-detail'}`}>
       <div className="ambient ambient-one" aria-hidden="true"></div>
       <div className="ambient ambient-two" aria-hidden="true"></div>
 
@@ -1198,6 +1264,16 @@ function App() {
               <div className="notice">Loading secure session...</div>
             </section>
           </motion.main>
+        ) : view === 'publicHome' ? (
+          <WelcomePage
+            onGoToClientAccess={() => navigateToView('clientAccess')}
+            onGoToAdminLogin={() => navigateToView('welcome')}
+            isPublic={true}
+          />
+        ) : view === 'clientAccess' ? (
+          renderClientAccess()
+        ) : view === 'publicIntake' ? (
+          renderPublicIntake()
         ) : !authToken ? (
           renderLogin()
         ) : view === 'welcome' ? (
@@ -1207,6 +1283,7 @@ function App() {
             onGoToSavedPatients={() => navigateToView('savedPatients')}
             onGoToSavedAppointments={() => navigateToView('savedAppointments')}
             onGoToDashboardStats={() => navigateToView('dashboardStats')}
+            isPublic={false}
           />
         ) : view === 'dashboard' ? (
           renderDashboard()

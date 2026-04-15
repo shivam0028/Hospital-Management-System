@@ -10,6 +10,7 @@ from bson.errors import InvalidId
 from flask import Flask, g, jsonify, request
 from flask_cors import CORS
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
+from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.exceptions import HTTPException
 from pymongo import MongoClient
 
@@ -46,6 +47,8 @@ MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017')
 MONGO_DB_NAME = os.getenv('MONGO_DB_NAME', 'clinic_management_system')
 MONGO_PATIENTS_COLLECTION = os.getenv('MONGO_PATIENTS_COLLECTION', 'patients')
 MONGO_APPOINTMENTS_COLLECTION = os.getenv('MONGO_APPOINTMENTS_COLLECTION', 'appointments')
+MONGO_CLIENTS_COLLECTION = os.getenv('MONGO_CLIENTS_COLLECTION', 'clients')
+MONGO_CLIENT_RECORDS_COLLECTION = os.getenv('MONGO_CLIENT_RECORDS_COLLECTION', 'client_records')
 MONGO_SERVER_SELECTION_TIMEOUT_MS = int(os.getenv('MONGO_SERVER_SELECTION_TIMEOUT_MS', '1500'))
 AUTH_USERNAME = os.getenv('AUTH_USERNAME', 'admin')
 AUTH_PASSWORD = os.getenv('AUTH_PASSWORD', 'admin123')
@@ -55,14 +58,23 @@ mongo_client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=MONGO_SERVER_SELE
 mongo_db = mongo_client[MONGO_DB_NAME]
 patients_collection = mongo_db[MONGO_PATIENTS_COLLECTION]
 appointments_collection = mongo_db[MONGO_APPOINTMENTS_COLLECTION]
+clients_collection = mongo_db[MONGO_CLIENTS_COLLECTION]
+client_records_collection = mongo_db[MONGO_CLIENT_RECORDS_COLLECTION]
 auth_serializer = URLSafeTimedSerializer(app.config['SECRET_KEY'], salt='clinic-dashboard-auth')
 
 fallback_patients: dict[str, dict] = {}
 fallback_appointments: dict[str, dict] = {}
+fallback_clients: dict[str, dict] = {}
+fallback_client_records: dict[str, dict] = {}
 
 
-def create_auth_token(username: str) -> str:
-    return auth_serializer.dumps({'username': username})
+def create_auth_token(identity: str, role: str = 'staff') -> str:
+    payload: dict[str, str] = {'role': role}
+    if role == 'client':
+        payload['mobile'] = identity
+    else:
+        payload['username'] = identity
+    return auth_serializer.dumps(payload)
 
 
 def get_bearer_token() -> str:
@@ -72,7 +84,7 @@ def get_bearer_token() -> str:
     return ''
 
 
-def get_authenticated_username() -> str | None:
+def get_authenticated_payload() -> dict | None:
     token = get_bearer_token()
     if not token:
         return None
@@ -82,8 +94,29 @@ def get_authenticated_username() -> str | None:
     except (BadSignature, SignatureExpired):
         return None
 
+    role = str(payload.get('role', 'staff')).strip() or 'staff'
     username = str(payload.get('username', '')).strip()
-    return username or None
+    mobile = str(payload.get('mobile', '')).strip()
+
+    if role == 'client' and mobile:
+        return {'role': 'client', 'mobile': mobile}
+    if username:
+        return {'role': 'staff', 'username': username}
+    return None
+
+
+def get_authenticated_username() -> str | None:
+    payload = get_authenticated_payload()
+    if not payload or payload.get('role') != 'staff':
+        return None
+    return str(payload.get('username', '')).strip() or None
+
+
+def get_authenticated_client_mobile() -> str | None:
+    payload = get_authenticated_payload()
+    if not payload or payload.get('role') != 'client':
+        return None
+    return str(payload.get('mobile', '')).strip() or None
 
 
 def require_auth(view_function):
@@ -99,13 +132,33 @@ def require_auth(view_function):
     return wrapped_view
 
 
-def normalize_patient(doc: dict) -> dict:
+def require_client_auth(view_function):
+    @wraps(view_function)
+    def wrapped_view(*args, **kwargs):
+        mobile = get_authenticated_client_mobile()
+        if not mobile:
+            return jsonify({'error': 'Client authentication required'}), 401
+
+        g.current_client_mobile = mobile
+        return view_function(*args, **kwargs)
+
+    return wrapped_view
+
+
+def normalize_patient(doc: dict, current_user: str | None = None) -> dict:
+    created_by = str(doc.get('created_by', '')).strip()
+    can_delete = bool(current_user and created_by and current_user == created_by)
+
     return {
         'MOBILE': doc.get('_id', ''),
         'NAME': doc.get('NAME', ''),
         'DOB': doc.get('DOB', ''),
         'HISTORY': doc.get('HISTORY', ''),
         'MEDICINES': doc.get('MEDICINES', ''),
+        'CREATED_BY': created_by,
+        'CAN_DELETE': can_delete,
+        'CAN_EDIT': False,
+        'IS_LOCKED': True,
     }
 
 
@@ -133,8 +186,26 @@ def normalize_appointment(doc: dict) -> dict:
     }
 
 
-def get_fallback_patients() -> list[dict]:
-    return [normalize_patient(doc) for doc in sorted(fallback_patients.values(), key=lambda item: item.get('NAME', ''))]
+def normalize_client_record(doc: dict) -> dict:
+    created_at = doc.get('created_at')
+    if isinstance(created_at, datetime):
+        created_at_value = created_at.isoformat()
+    else:
+        created_at_value = str(created_at or '')
+
+    return {
+        'RECORD_ID': str(doc.get('_id', '')),
+        'MOBILE': str(doc.get('MOBILE', '')).strip(),
+        'NAME': str(doc.get('NAME', '')).strip(),
+        'DOB': str(doc.get('DOB', '')).strip(),
+        'HISTORY': str(doc.get('HISTORY', '')).strip(),
+        'MEDICINES': str(doc.get('MEDICINES', '')).strip(),
+        'CREATED_AT': created_at_value,
+    }
+
+
+def get_fallback_patients(current_user: str | None = None) -> list[dict]:
+    return [normalize_patient(doc, current_user) for doc in sorted(fallback_patients.values(), key=lambda item: item.get('NAME', ''))]
 
 
 def get_fallback_appointments() -> list[dict]:
@@ -180,14 +251,188 @@ def auth_me():
     return jsonify({'user': {'username': g.current_user}})
 
 
+@app.post('/api/client/register')
+def client_register():
+    payload = request.get_json(force=True, silent=True) or {}
+    mobile = str(payload.get('mobile', '')).strip()
+    password = str(payload.get('password', '')).strip()
+    display_name = str(payload.get('name', '')).strip() or mobile
+
+    if not mobile or not password:
+        return jsonify({'error': 'Mobile and password are required'}), 400
+    if len(password) < 4:
+        return jsonify({'error': 'Password must be at least 4 characters'}), 400
+
+    password_hash = generate_password_hash(password)
+
+    try:
+        existing = clients_collection.find_one({'_id': mobile}, {'_id': 1})
+        if existing:
+            return jsonify({'error': 'Client account already exists'}), 409
+
+        clients_collection.insert_one(
+            {
+                '_id': mobile,
+                'NAME': display_name,
+                'PASSWORD_HASH': password_hash,
+                'created_at': datetime.utcnow(),
+                'updated_at': datetime.utcnow(),
+            }
+        )
+    except Exception:
+        if mobile in fallback_clients:
+            return jsonify({'error': 'Client account already exists'}), 409
+
+        fallback_clients[mobile] = {
+            '_id': mobile,
+            'NAME': display_name,
+            'PASSWORD_HASH': password_hash,
+            'created_at': datetime.utcnow(),
+            'updated_at': datetime.utcnow(),
+        }
+
+    token = create_auth_token(mobile, role='client')
+    return jsonify({'token': token, 'client': {'mobile': mobile, 'name': display_name}}), 201
+
+
+@app.post('/api/client/login')
+def client_login():
+    payload = request.get_json(force=True, silent=True) or {}
+    mobile = str(payload.get('mobile', '')).strip()
+    password = str(payload.get('password', '')).strip()
+
+    if not mobile or not password:
+        return jsonify({'error': 'Mobile and password are required'}), 400
+
+    account = None
+    try:
+        account = clients_collection.find_one({'_id': mobile})
+    except Exception:
+        account = fallback_clients.get(mobile)
+
+    if not account:
+        return jsonify({'error': 'Client account not found. Please register first.'}), 404
+
+    stored_hash = str(account.get('PASSWORD_HASH', '')).strip()
+    if not stored_hash or not check_password_hash(stored_hash, password):
+        return jsonify({'error': 'Invalid mobile or password'}), 401
+
+    token = create_auth_token(mobile, role='client')
+    return jsonify({'token': token, 'client': {'mobile': mobile, 'name': account.get('NAME', mobile)}})
+
+
+@app.get('/api/client/me')
+@require_client_auth
+def client_me():
+    mobile = g.current_client_mobile
+    account = None
+
+    try:
+        account = clients_collection.find_one({'_id': mobile})
+    except Exception:
+        account = fallback_clients.get(mobile)
+
+    name = str((account or {}).get('NAME', '')).strip() or mobile
+    return jsonify({'client': {'mobile': mobile, 'name': name}})
+
+
+@app.get('/api/client/records')
+@require_client_auth
+def client_get_records():
+    mobile = g.current_client_mobile
+
+    try:
+        rows = [
+            normalize_client_record(doc)
+            for doc in client_records_collection.find({'MOBILE': mobile}).sort('created_at', -1)
+        ]
+        return jsonify(rows)
+    except Exception:
+        rows = [
+            normalize_client_record(doc)
+            for doc in fallback_client_records.values()
+            if str(doc.get('MOBILE', '')).strip() == mobile
+        ]
+        rows.sort(key=lambda item: item.get('CREATED_AT', ''), reverse=True)
+        return jsonify(rows)
+
+
+@app.post('/api/client/records')
+@require_client_auth
+def client_add_record():
+    mobile = g.current_client_mobile
+    payload = request.get_json(force=True, silent=True) or {}
+    name = str(payload.get('name', '')).strip()
+    dob = str(payload.get('dob', '')).strip()
+    history = str(payload.get('history', '')).strip()
+    medicines = str(payload.get('medicines', '')).strip()
+
+    if not all([name, dob, history, medicines]):
+        return jsonify({'error': 'All record fields are required'}), 400
+
+    record_doc = {
+        'MOBILE': mobile,
+        'NAME': name,
+        'DOB': dob,
+        'HISTORY': history,
+        'MEDICINES': medicines,
+        'created_at': datetime.utcnow(),
+    }
+
+    try:
+        result = client_records_collection.insert_one(record_doc)
+        record_doc['_id'] = result.inserted_id
+
+        # Keep staff patient list in sync with the latest client record.
+        patients_collection.update_one(
+            {'_id': mobile},
+            {
+                '$set': {
+                    'NAME': name,
+                    'DOB': dob,
+                    'HISTORY': history,
+                    'MEDICINES': medicines,
+                    'updated_at': datetime.utcnow(),
+                    'updated_by': f'client:{mobile}',
+                    'created_by': f'client:{mobile}',
+                },
+                '$setOnInsert': {
+                    'created_at': datetime.utcnow(),
+                },
+            },
+            upsert=True,
+        )
+    except Exception:
+        record_id = str(uuid4())
+        record_doc['_id'] = record_id
+        fallback_client_records[record_id] = record_doc
+
+        fallback_patients[mobile] = {
+            '_id': mobile,
+            'NAME': name,
+            'DOB': dob,
+            'HISTORY': history,
+            'MEDICINES': medicines,
+            'created_at': datetime.utcnow(),
+            'updated_at': datetime.utcnow(),
+            'created_by': f'client:{mobile}',
+            'updated_by': f'client:{mobile}',
+        }
+
+    return jsonify({'message': 'Record saved successfully', 'record': normalize_client_record(record_doc)}), 201
+
+
 @app.get('/api/patients')
 @require_auth
 def get_patients():
     try:
-        rows = [normalize_patient(doc) for doc in patients_collection.find({}, {'_id': 1, 'NAME': 1, 'DOB': 1, 'HISTORY': 1, 'MEDICINES': 1}).sort('NAME', 1)]
+        rows = [
+            normalize_patient(doc, g.current_user)
+            for doc in patients_collection.find({}, {'_id': 1, 'NAME': 1, 'DOB': 1, 'HISTORY': 1, 'MEDICINES': 1, 'created_by': 1}).sort('NAME', 1)
+        ]
         return jsonify(rows)
     except Exception:
-        return jsonify(get_fallback_patients())
+        return jsonify(get_fallback_patients(g.current_user))
 
 
 @app.post('/api/patients')
@@ -243,54 +488,40 @@ def add_patient():
 @app.put('/api/patients/<mobile>')
 @require_auth
 def update_patient(mobile: str):
-    payload = request.get_json(force=True, silent=True) or {}
-    name = str(payload.get('name', '')).strip()
-    dob = str(payload.get('dob', '')).strip()
-    history = str(payload.get('history', '')).strip()
-    medicines = str(payload.get('medicines', '')).strip()
-
-    if not all([name, dob, history, medicines]):
-        return jsonify({'error': 'All patient fields are required'}), 400
-
     try:
-        result = patients_collection.update_one(
-            {'_id': mobile},
-            {
-                '$set': {
-                    'NAME': name,
-                    'DOB': dob,
-                    'HISTORY': history,
-                    'MEDICINES': medicines,
-                    'updated_at': datetime.utcnow(),
-                    'updated_by': g.current_user,
-                }
-            },
-        )
-        if result.matched_count == 0:
+        existing = patients_collection.find_one({'_id': mobile}, {'created_by': 1})
+        if not existing:
             return jsonify({'error': 'Patient not found'}), 404
-        return jsonify({'message': 'Patient updated successfully'})
+
+        created_by = str(existing.get('created_by', '')).strip()
+        if created_by and created_by != g.current_user:
+            return jsonify({'error': 'You can only edit your own patient records'}), 403
+
+        return jsonify({'error': 'Saved patient records are locked and cannot be edited'}), 423
     except Exception:
         existing = fallback_patients.get(mobile)
         if not existing:
             return jsonify({'error': 'Patient not found'}), 404
 
-        existing.update(
-            {
-                'NAME': name,
-                'DOB': dob,
-                'HISTORY': history,
-                'MEDICINES': medicines,
-                'updated_at': datetime.utcnow(),
-                'updated_by': g.current_user,
-            }
-        )
-        return jsonify({'message': 'Patient updated successfully'})
+        created_by = str(existing.get('created_by', '')).strip()
+        if created_by and created_by != g.current_user:
+            return jsonify({'error': 'You can only edit your own patient records'}), 403
+
+        return jsonify({'error': 'Saved patient records are locked and cannot be edited'}), 423
 
 
 @app.delete('/api/patients/<mobile>')
 @require_auth
 def delete_patient(mobile: str):
     try:
+        existing = patients_collection.find_one({'_id': mobile}, {'created_by': 1})
+        if not existing:
+            return jsonify({'error': 'Patient not found'}), 404
+
+        created_by = str(existing.get('created_by', '')).strip()
+        if created_by and created_by != g.current_user:
+            return jsonify({'error': 'You can only delete your own patient records'}), 403
+
         result = patients_collection.delete_one({'_id': mobile})
         if result.deleted_count == 0:
             return jsonify({'error': 'Patient not found'}), 404
@@ -299,6 +530,12 @@ def delete_patient(mobile: str):
         deleted = fallback_patients.pop(mobile, None)
         if deleted is None:
             return jsonify({'error': 'Patient not found'}), 404
+
+        created_by = str(deleted.get('created_by', '')).strip()
+        if created_by and created_by != g.current_user:
+            fallback_patients[mobile] = deleted
+            return jsonify({'error': 'You can only delete your own patient records'}), 403
+
         return jsonify({'message': 'Patient deleted successfully'})
 
 
@@ -406,6 +643,86 @@ def delete_appointment(patient_id: str):
         if deleted is None:
             return jsonify({'error': 'Appointment not found'}), 404
         return jsonify({'message': 'Appointment deleted successfully'})
+
+
+@app.post('/api/public/patients')
+def public_add_patient():
+    """Public endpoint - no authentication required for patient intake form"""
+    payload = request.get_json(force=True, silent=True) or {}
+    mobile = str(payload.get('mobile', '')).strip()
+    name = str(payload.get('name', '')).strip()
+    dob = str(payload.get('dob', '')).strip()
+    history = str(payload.get('history', '')).strip()
+    medicines = str(payload.get('medicines', '')).strip()
+
+    if not all([mobile, name, dob, history, medicines]):
+        return jsonify({'error': 'All patient fields are required'}), 400
+
+    try:
+        existing = patients_collection.find_one({'_id': mobile})
+        if existing:
+            return jsonify({'error': 'A patient record with this mobile number already exists'}), 409
+
+        patients_collection.insert_one(
+            {
+                '_id': mobile,
+                'NAME': name,
+                'DOB': dob,
+                'HISTORY': history,
+                'MEDICINES': medicines,
+                'created_at': datetime.utcnow(),
+                'updated_at': datetime.utcnow(),
+                'created_by': 'public_patient',
+            }
+        )
+        return jsonify({'message': 'Patient registered successfully'}), 201
+    except Exception:
+        if mobile in fallback_patients:
+            return jsonify({'error': 'A patient record with this mobile number already exists'}), 409
+
+        fallback_patients[mobile] = {
+            '_id': mobile,
+            'NAME': name,
+            'DOB': dob,
+            'HISTORY': history,
+            'MEDICINES': medicines,
+            'created_at': datetime.utcnow(),
+            'updated_at': datetime.utcnow(),
+            'created_by': 'public_patient',
+        }
+        return jsonify({'message': 'Patient registered successfully'}), 201
+
+
+@app.get('/api/public/patients/<mobile>')
+def public_get_patient(mobile: str):
+    """Public endpoint - patient can view their own record with just their mobile"""
+    try:
+        doc = patients_collection.find_one({'_id': mobile})
+        if not doc:
+            return jsonify({'error': 'Patient record not found'}), 404
+
+        return jsonify(normalize_patient(doc, 'public_patient'))
+    except Exception:
+        patient = fallback_patients.get(mobile)
+        if not patient:
+            return jsonify({'error': 'Patient record not found'}), 404
+
+        return jsonify(normalize_patient(patient, 'public_patient'))
+
+
+@app.delete('/api/public/patients/<mobile>')
+def public_delete_patient(mobile: str):
+    """Public endpoint - patient can delete their own record"""
+    try:
+        result = patients_collection.delete_one({'_id': mobile})
+        if result.deleted_count == 0:
+            return jsonify({'error': 'Patient record not found'}), 404
+        return jsonify({'message': 'Patient record deleted successfully'})
+    except Exception:
+        deleted = fallback_patients.pop(mobile, None)
+        if deleted is None:
+            return jsonify({'error': 'Patient record not found'}), 404
+        return jsonify({'message': 'Patient record deleted successfully'})
 
 
 if __name__ == '__main__':

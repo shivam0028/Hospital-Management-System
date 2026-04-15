@@ -1,4 +1,4 @@
-export default function SavedPatientsPanel({ patients, onEditPatient, onDeletePatient }) {
+export default function SavedPatientsPanel({ patients, onDeletePatient }) {
   return (
     <aside className="detail-panel detail-panel-cream">
       <div className="section-heading">
@@ -11,6 +11,7 @@ export default function SavedPatientsPanel({ patients, onEditPatient, onDeletePa
           <span>Mobile</span>
           <span>Name</span>
           <span>Birth date</span>
+          <span>Owner</span>
           <span>Actions</span>
         </div>
         <div className="table-body">
@@ -22,11 +23,18 @@ export default function SavedPatientsPanel({ patients, onEditPatient, onDeletePa
                 <span>{patient.MOBILE}</span>
                 <span>{patient.NAME}</span>
                 <span>{patient.DOB}</span>
+                <span>{patient.CREATED_BY || 'Unknown'}</span>
                 <span className="row-actions">
-                  <button type="button" onClick={() => onEditPatient(patient)}>
-                    Edit
+                  <button type="button" disabled title="Saved records cannot be edited.">
+                    Locked
                   </button>
-                  <button type="button" className="danger-button" onClick={() => onDeletePatient(patient.MOBILE)}>
+                  <button
+                    type="button"
+                    className="danger-button"
+                    onClick={() => onDeletePatient(patient.MOBILE)}
+                    disabled={!patient.CAN_DELETE}
+                    title={patient.CAN_DELETE ? 'Delete your own patient record' : 'You can only delete your own records'}
+                  >
                     Delete
                   </button>
                 </span>
@@ -36,7 +44,7 @@ export default function SavedPatientsPanel({ patients, onEditPatient, onDeletePa
         </div>
       </div>
 
-      <p className="sidebar-note">These entries come straight from the backend.</p>
+      <p className="sidebar-note">Saved records come from backend and are locked for edit after save.</p>
     </aside>
   )
 }
