@@ -1,23 +1,41 @@
 from __future__ import annotations
 
 import os
+from functools import wraps
 from datetime import datetime
 from uuid import uuid4
 
 from bson import ObjectId
 from bson.errors import InvalidId
-from flask import Flask, jsonify, request
+from flask import Flask, g, jsonify, request
 from flask_cors import CORS
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from werkzeug.exceptions import HTTPException
 from pymongo import MongoClient
 
 app = Flask(__name__)
-CORS(app)
+app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'clinic-management-dev-secret')
+
+cors_origins = [origin.strip() for origin in os.getenv('CORS_ORIGINS', '*').split(',') if origin.strip()]
+CORS(app, resources={r'/api/*': {'origins': cors_origins}}, allow_headers=['Content-Type', 'Authorization'])
 
 
 @app.errorhandler(HTTPException)
 def handle_http_exception(exc: HTTPException):
     return jsonify({'error': exc.description or exc.name}), exc.code
+
+
+@app.errorhandler(404)
+def handle_not_found(exc):
+    return (
+        jsonify(
+            {
+                'error': 'The requested URL was not found on the server.',
+                'valid_routes': ['/','/api','/api/health','/api/auth/login','/api/auth/me','/api/patients','/api/appointments'],
+            }
+        ),
+        404,
+    )
 
 
 @app.errorhandler(Exception)
@@ -29,14 +47,56 @@ MONGO_DB_NAME = os.getenv('MONGO_DB_NAME', 'clinic_management_system')
 MONGO_PATIENTS_COLLECTION = os.getenv('MONGO_PATIENTS_COLLECTION', 'patients')
 MONGO_APPOINTMENTS_COLLECTION = os.getenv('MONGO_APPOINTMENTS_COLLECTION', 'appointments')
 MONGO_SERVER_SELECTION_TIMEOUT_MS = int(os.getenv('MONGO_SERVER_SELECTION_TIMEOUT_MS', '1500'))
+AUTH_USERNAME = os.getenv('AUTH_USERNAME', 'admin')
+AUTH_PASSWORD = os.getenv('AUTH_PASSWORD', 'admin123')
+AUTH_TOKEN_MAX_AGE_SECONDS = int(os.getenv('AUTH_TOKEN_MAX_AGE_SECONDS', str(60 * 60 * 12)))
 
 mongo_client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=MONGO_SERVER_SELECTION_TIMEOUT_MS)
 mongo_db = mongo_client[MONGO_DB_NAME]
 patients_collection = mongo_db[MONGO_PATIENTS_COLLECTION]
 appointments_collection = mongo_db[MONGO_APPOINTMENTS_COLLECTION]
+auth_serializer = URLSafeTimedSerializer(app.config['SECRET_KEY'], salt='clinic-dashboard-auth')
 
 fallback_patients: dict[str, dict] = {}
 fallback_appointments: dict[str, dict] = {}
+
+
+def create_auth_token(username: str) -> str:
+    return auth_serializer.dumps({'username': username})
+
+
+def get_bearer_token() -> str:
+    authorization_header = request.headers.get('Authorization', '').strip()
+    if authorization_header.lower().startswith('bearer '):
+        return authorization_header[7:].strip()
+    return ''
+
+
+def get_authenticated_username() -> str | None:
+    token = get_bearer_token()
+    if not token:
+        return None
+
+    try:
+        payload = auth_serializer.loads(token, max_age=AUTH_TOKEN_MAX_AGE_SECONDS)
+    except (BadSignature, SignatureExpired):
+        return None
+
+    username = str(payload.get('username', '')).strip()
+    return username or None
+
+
+def require_auth(view_function):
+    @wraps(view_function)
+    def wrapped_view(*args, **kwargs):
+        username = get_authenticated_username()
+        if not username:
+            return jsonify({'error': 'Authentication required'}), 401
+
+        g.current_user = username
+        return view_function(*args, **kwargs)
+
+    return wrapped_view
 
 
 def normalize_patient(doc: dict) -> dict:
@@ -86,7 +146,42 @@ def health():
     return jsonify({'status': 'ok'})
 
 
+@app.get('/')
+def index():
+    return jsonify(
+        {
+            'message': 'Clinic Management API is running',
+            'endpoints': ['/api/health', '/api/auth/login', '/api/auth/me', '/api/patients', '/api/appointments'],
+        }
+    )
+
+
+@app.get('/api')
+def api_root():
+    return jsonify({'message': 'Use /api/health or the authenticated resource endpoints'})
+
+
+@app.post('/api/auth/login')
+def login():
+    payload = request.get_json(force=True, silent=True) or {}
+    username = str(payload.get('username', '')).strip()
+    password = str(payload.get('password', '')).strip()
+
+    if username != AUTH_USERNAME or password != AUTH_PASSWORD:
+        return jsonify({'error': 'Invalid username or password'}), 401
+
+    token = create_auth_token(username)
+    return jsonify({'token': token, 'user': {'username': username}})
+
+
+@app.get('/api/auth/me')
+@require_auth
+def auth_me():
+    return jsonify({'user': {'username': g.current_user}})
+
+
 @app.get('/api/patients')
+@require_auth
 def get_patients():
     try:
         rows = [normalize_patient(doc) for doc in patients_collection.find({}, {'_id': 1, 'NAME': 1, 'DOB': 1, 'HISTORY': 1, 'MEDICINES': 1}).sort('NAME', 1)]
@@ -96,6 +191,7 @@ def get_patients():
 
 
 @app.post('/api/patients')
+@require_auth
 def add_patient():
     payload = request.get_json(force=True, silent=True) or {}
     mobile = str(payload.get('mobile', '')).strip()
@@ -121,6 +217,8 @@ def add_patient():
                 'MEDICINES': medicines,
                 'created_at': datetime.utcnow(),
                 'updated_at': datetime.utcnow(),
+                'created_by': g.current_user,
+                'updated_by': g.current_user,
             }
         )
         return jsonify({'message': 'Patient added successfully'}), 201
@@ -136,11 +234,14 @@ def add_patient():
             'MEDICINES': medicines,
             'created_at': datetime.utcnow(),
             'updated_at': datetime.utcnow(),
+            'created_by': g.current_user,
+            'updated_by': g.current_user,
         }
         return jsonify({'message': 'Patient added successfully'}), 201
 
 
 @app.put('/api/patients/<mobile>')
+@require_auth
 def update_patient(mobile: str):
     payload = request.get_json(force=True, silent=True) or {}
     name = str(payload.get('name', '')).strip()
@@ -161,6 +262,7 @@ def update_patient(mobile: str):
                     'HISTORY': history,
                     'MEDICINES': medicines,
                     'updated_at': datetime.utcnow(),
+                    'updated_by': g.current_user,
                 }
             },
         )
@@ -179,12 +281,14 @@ def update_patient(mobile: str):
                 'HISTORY': history,
                 'MEDICINES': medicines,
                 'updated_at': datetime.utcnow(),
+                'updated_by': g.current_user,
             }
         )
         return jsonify({'message': 'Patient updated successfully'})
 
 
 @app.delete('/api/patients/<mobile>')
+@require_auth
 def delete_patient(mobile: str):
     try:
         result = patients_collection.delete_one({'_id': mobile})
@@ -199,6 +303,7 @@ def delete_patient(mobile: str):
 
 
 @app.get('/api/appointments')
+@require_auth
 def get_appointments():
     try:
         rows = [
@@ -225,6 +330,7 @@ def get_appointments():
 
 
 @app.post('/api/appointments')
+@require_auth
 def add_appointment():
     payload = request.get_json(force=True, silent=True) or {}
     name = str(payload.get('name', '')).strip()
@@ -255,6 +361,7 @@ def add_appointment():
                 'PAYMENT_REFERENCE': payment_reference,
                 'PAYMENT_AMOUNT': payment_amount,
                 'created_at': datetime.utcnow(),
+                'created_by': g.current_user,
             }
         )
         return jsonify({'message': 'Appointment added successfully', 'PATIENT_ID': str(result.inserted_id)}), 201
@@ -273,11 +380,13 @@ def add_appointment():
             'PAYMENT_REFERENCE': payment_reference,
             'PAYMENT_AMOUNT': payment_amount,
             'created_at': datetime.utcnow(),
+            'created_by': g.current_user,
         }
         return jsonify({'message': 'Appointment added successfully', 'PATIENT_ID': patient_id}), 201
 
 
 @app.delete('/api/appointments/<patient_id>')
+@require_auth
 def delete_appointment(patient_id: str):
     try:
         try:
@@ -297,10 +406,6 @@ def delete_appointment(patient_id: str):
         if deleted is None:
             return jsonify({'error': 'Appointment not found'}), 404
         return jsonify({'message': 'Appointment deleted successfully'})
-    
-    @app.route('/api/health')
-    def health_check():
-        return jsonify({'status': 'healthy'})
 
 
 if __name__ == '__main__':

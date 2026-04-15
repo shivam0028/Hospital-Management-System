@@ -35,6 +35,7 @@ HMS/
 
 * Overview of hospital data
 * Displays counts (Patients, Doctors, Appointments, Bills)
+* Protected by backend authentication for write actions
 
 ###  Patient Management
 
@@ -95,6 +96,14 @@ pip install -r requirements.txt
 python app.py
 ```
 
+Set these environment variables before starting the backend if you want to change the defaults:
+
+* `AUTH_USERNAME`
+* `AUTH_PASSWORD`
+* `FLASK_SECRET_KEY`
+* `CORS_ORIGINS`
+* `MONGO_URI`
+
 OR (if Node backend)
 
 ```bash
@@ -126,7 +135,6 @@ npm run dev
 
 ## Future Enhancements
 
-*  User authentication (Login/Signup)
 *  Analytics dashboard
 *  Database integration (MongoDB)
 *  Deployment (Netlify / Render)

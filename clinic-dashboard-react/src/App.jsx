@@ -14,8 +14,9 @@ import './App.css'
 
 const Lottie = LottieModule.default ?? LottieModule
 
-// const API_BASE = '/api'
-const API_BASE = "https://hospital-backend-obzv.onrender.com/api"
+const API_BASE = '/api'
+const AUTH_TOKEN_STORAGE_KEY = 'clinic-dashboard-auth-token'
+const AUTH_USER_STORAGE_KEY = 'clinic-dashboard-auth-user'
 
 const emptyPatientForm = {
   mobile: '',
@@ -40,6 +41,11 @@ const defaultPaymentForm = {
   expiry: '',
   cvv: '',
   amount: 500,
+}
+
+const defaultLoginForm = {
+  username: '',
+  password: '',
 }
 
 const pageMotion = {
@@ -102,8 +108,19 @@ const parseResponseBody = async (response) => {
   }
 }
 
+const getStoredAuth = () => ({
+  token: window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || '',
+  user: window.localStorage.getItem(AUTH_USER_STORAGE_KEY) || '',
+})
+
 function App() {
   const [view, setView] = useState('welcome')
+  const [authToken, setAuthToken] = useState(() => getStoredAuth().token)
+  const [authUser, setAuthUser] = useState(() => getStoredAuth().user)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [authError, setAuthError] = useState('')
+  const [loginForm, setLoginForm] = useState(defaultLoginForm)
+  const [authenticating, setAuthenticating] = useState(false)
   const [patients, setPatients] = useState([])
   const [appointments, setAppointments] = useState([])
   const [loading, setLoading] = useState(true)
@@ -122,23 +139,65 @@ function App() {
   const orbOneRef = useRef(null)
   const orbTwoRef = useRef(null)
 
+  const clearAuthSession = (message = '') => {
+    window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY)
+    window.localStorage.removeItem(AUTH_USER_STORAGE_KEY)
+    setAuthToken('')
+    setAuthUser('')
+    setAuthError(message)
+    setPatients([])
+    setAppointments([])
+    setLoading(false)
+    setError('')
+    setPendingAppointment(null)
+    setReceiptData(null)
+    setSelectedAppointment(null)
+    setEditingPatient(null)
+    setPatientForm(emptyPatientForm)
+    setAppointmentForm(emptyAppointmentForm)
+    setPaymentForm(defaultPaymentForm)
+    setView('welcome')
+  }
+
+  const apiFetch = (path, options = {}, tokenOverride = authToken) => {
+    const headers = new Headers(options.headers || {})
+    if (tokenOverride) {
+      headers.set('Authorization', `Bearer ${tokenOverride}`)
+    }
+
+    return fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers,
+    })
+  }
+
   const navigateToView = (nextView) => {
     setView(nextView)
     window.scrollTo(0, 0)
   }
 
-  const loadData = async () => {
+  const loadData = async (tokenOverride = authToken) => {
+    if (!tokenOverride) {
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
     setError('')
 
     try {
       const [patientResponse, appointmentResponse] = await Promise.all([
-        fetch(`${API_BASE}/patients`),
-        fetch(`${API_BASE}/appointments`),
+        apiFetch('/patients', {}, tokenOverride),
+        apiFetch('/appointments', {}, tokenOverride),
       ])
 
       const patientData = await parseResponseBody(patientResponse)
       const appointmentData = await parseResponseBody(appointmentResponse)
+
+      if (patientResponse.status === 401 || appointmentResponse.status === 401) {
+        clearAuthSession(patientData.error || appointmentData.error || 'Your session expired. Please sign in again.')
+        return
+      }
 
       if (!patientResponse.ok) {
         throw new Error(patientData.error || 'Failed to load patients')
@@ -157,8 +216,65 @@ function App() {
   }
 
   useEffect(() => {
-    loadData()
+    let cancelled = false
+
+    const bootstrapAuth = async () => {
+      const storedAuth = getStoredAuth()
+
+      if (!storedAuth.token) {
+        if (!cancelled) {
+          setAuthLoading(false)
+        }
+        return
+      }
+
+      try {
+        const response = await apiFetch('/auth/me', {}, storedAuth.token)
+        const data = await parseResponseBody(response)
+
+        if (response.status === 401 || !response.ok) {
+          throw new Error(data.error || 'Saved session is no longer valid')
+        }
+
+        if (cancelled) {
+          return
+        }
+
+        const username = data.user?.username || storedAuth.user || 'admin'
+        window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, storedAuth.token)
+        window.localStorage.setItem(AUTH_USER_STORAGE_KEY, username)
+        setAuthToken(storedAuth.token)
+        setAuthUser(username)
+        setAuthError('')
+        await loadData(storedAuth.token)
+      } catch {
+        if (!cancelled) {
+          clearAuthSession('Your session expired. Please sign in again.')
+        }
+      } finally {
+        if (!cancelled) {
+          setAuthLoading(false)
+        }
+      }
+    }
+
+    void bootstrapAuth()
+
+    return () => {
+      cancelled = true
+    }
   }, [])
+
+  useEffect(() => {
+    if (!authToken) {
+      setLoading(false)
+      setPatients([])
+      setAppointments([])
+      return
+    }
+
+    window.scrollTo(0, 0)
+  }, [authToken])
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -231,6 +347,52 @@ function App() {
     setPaymentForm(defaultPaymentForm)
   }
 
+  const signOut = () => {
+    clearAuthSession('')
+    setLoginForm(defaultLoginForm)
+    setAuthError('')
+  }
+
+  const signIn = async () => {
+    const username = loginForm.username.trim()
+    const password = loginForm.password
+
+    if (!username || !password) {
+      setAuthError('Enter both username and password.')
+      return
+    }
+
+    setAuthenticating(true)
+    setAuthError('')
+
+    try {
+      const response = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      })
+      const data = await parseResponseBody(response)
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Unable to sign in')
+      }
+
+      const token = data.token || ''
+      const signedInUser = data.user?.username || username
+
+      window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token)
+      window.localStorage.setItem(AUTH_USER_STORAGE_KEY, signedInUser)
+      setAuthToken(token)
+      setAuthUser(signedInUser)
+      setView('welcome')
+      await loadData(token)
+    } catch (loginError) {
+      setAuthError(loginError.message || 'Unable to sign in')
+    } finally {
+      setAuthenticating(false)
+    }
+  }
+
   const savePatient = async () => {
     const payload = {
       mobile: patientForm.mobile.trim(),
@@ -249,15 +411,22 @@ function App() {
     setError('')
 
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         editingPatient ? `${API_BASE}/patients/${editingPatient}` : `${API_BASE}/patients`,
         {
           method: editingPatient ? 'PUT' : 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         },
+        authToken,
       )
       const data = await parseResponseBody(response)
+
+      if (response.status === 401) {
+        clearAuthSession(data.error || 'Your session expired. Please sign in again.')
+        return
+      }
+
       if (!response.ok) {
         throw new Error(data.error || 'Unable to save patient record')
       }
@@ -290,10 +459,20 @@ function App() {
     }
 
     try {
-      const response = await fetch(`${API_BASE}/patients/${encodeURIComponent(mobile)}`, {
-        method: 'DELETE',
-      })
+      const response = await apiFetch(
+        `/patients/${encodeURIComponent(mobile)}`,
+        {
+          method: 'DELETE',
+        },
+        authToken,
+      )
       const data = await parseResponseBody(response)
+
+      if (response.status === 401) {
+        clearAuthSession(data.error || 'Your session expired. Please sign in again.')
+        return
+      }
+
       if (!response.ok) {
         throw new Error(data.error || 'Unable to delete patient record')
       }
@@ -356,12 +535,22 @@ function App() {
         payment_reference: `PAY-${Date.now()}`,
       }
 
-      const response = await fetch(`${API_BASE}/appointments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
+      const response = await apiFetch(
+        '/appointments',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        },
+        authToken,
+      )
       const data = await parseResponseBody(response)
+
+      if (response.status === 401) {
+        clearAuthSession(data.error || 'Your session expired. Please sign in again.')
+        return
+      }
+
       if (!response.ok) {
         throw new Error(data.error || 'Unable to save appointment')
       }
@@ -401,10 +590,20 @@ function App() {
     }
 
     try {
-      const response = await fetch(`${API_BASE}/appointments/${id}`, {
-        method: 'DELETE',
-      })
+      const response = await apiFetch(
+        `/appointments/${id}`,
+        {
+          method: 'DELETE',
+        },
+        authToken,
+      )
       const data = await parseResponseBody(response)
+
+      if (response.status === 401) {
+        clearAuthSession(data.error || 'Your session expired. Please sign in again.')
+        return
+      }
+
       if (!response.ok) {
         throw new Error(data.error || 'Unable to delete appointment')
       }
@@ -914,13 +1113,94 @@ function App() {
     />
   )
 
+  const renderLogin = () => (
+    <motion.main
+      key="login"
+      className="shell shell-dashboard dashboard-box auth-shell"
+      variants={pageMotion}
+      initial="hidden"
+      animate="show"
+      exit="exit"
+    >
+      <section className="auth-panel">
+        <p className="kicker kicker-accent">Secure access</p>
+        <h1>Sign in to manage clinic records</h1>
+        <p className="lead">
+          Patient and appointment changes are restricted to authenticated staff.
+        </p>
+
+        {authError ? <div className="notice notice-error">{authError}</div> : null}
+
+        <div className="record-form auth-form">
+          <label>
+            Username
+            <input
+              type="text"
+              placeholder="Enter username"
+              value={loginForm.username}
+              onChange={(event) => setLoginForm({ ...loginForm, username: event.target.value })}
+            />
+          </label>
+          <label>
+            Password
+            <input
+              type="password"
+              placeholder="Enter password"
+              value={loginForm.password}
+              onChange={(event) => setLoginForm({ ...loginForm, password: event.target.value })}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  void signIn()
+                }
+              }}
+            />
+          </label>
+        </div>
+
+        <div className="action-row">
+          <button type="button" onClick={() => void signIn()} disabled={authenticating}>
+            {authenticating ? 'Signing in...' : 'Sign in'}
+          </button>
+        </div>
+      </section>
+    </motion.main>
+  )
+
   return (
     <div className={`page ${view === 'welcome' ? 'page-welcome' : view === 'dashboard' ? 'page-dashboard' : 'page-detail'}`}>
       <div className="ambient ambient-one" aria-hidden="true"></div>
       <div className="ambient ambient-two" aria-hidden="true"></div>
 
+      {authToken ? (
+        <div className="auth-banner">
+          <span>Signed in as {authUser || 'admin'}</span>
+          <button type="button" className="secondary-button" onClick={signOut}>
+            Sign out
+          </button>
+        </div>
+      ) : null}
+
       <AnimatePresence mode="wait">
-        {view === 'welcome' && (
+        {authLoading ? (
+          <motion.main
+            key="auth-loading"
+            className="shell shell-dashboard dashboard-box auth-shell"
+            variants={pageMotion}
+            initial="hidden"
+            animate="show"
+            exit="exit"
+          >
+            <section className="auth-panel">
+              <p className="kicker kicker-accent">Secure access</p>
+              <h1>Checking your session</h1>
+              <p className="lead">Verifying stored credentials before opening the dashboard.</p>
+              <div className="notice">Loading secure session...</div>
+            </section>
+          </motion.main>
+        ) : !authToken ? (
+          renderLogin()
+        ) : view === 'welcome' ? (
           <WelcomePage
             onEnterDashboard={() => navigateToView('dashboard')}
             onGoToPatients={() => navigateToView('patients')}
@@ -928,16 +1208,25 @@ function App() {
             onGoToSavedAppointments={() => navigateToView('savedAppointments')}
             onGoToDashboardStats={() => navigateToView('dashboardStats')}
           />
+        ) : view === 'dashboard' ? (
+          renderDashboard()
+        ) : view === 'savedPatients' ? (
+          renderSavedPatients()
+        ) : view === 'savedAppointments' ? (
+          renderSavedAppointments()
+        ) : view === 'dashboardStats' ? (
+          renderDashboardStats()
+        ) : view === 'payment' ? (
+          renderPayment()
+        ) : view === 'receipt' ? (
+          renderReceipt()
+        ) : view === 'appointmentDetails' ? (
+          renderAppointmentDetails()
+        ) : view === 'patients' ? (
+          renderPatients()
+        ) : (
+          renderAppointments()
         )}
-        {view === 'dashboard' && renderDashboard()}
-        {view === 'savedPatients' && renderSavedPatients()}
-        {view === 'savedAppointments' && renderSavedAppointments()}
-        {view === 'dashboardStats' && renderDashboardStats()}
-        {view === 'payment' && renderPayment()}
-        {view === 'receipt' && renderReceipt()}
-        {view === 'appointmentDetails' && renderAppointmentDetails()}
-        {view === 'patients' && renderPatients()}
-        {view === 'appointments' && renderAppointments()}
       </AnimatePresence>
     </div>
   )
