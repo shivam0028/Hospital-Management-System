@@ -1,13 +1,13 @@
 .wc-shell {
   position: relative;
-  width: 100vw;
-  height: 100vh;
-  border-radius: 50px;
+  width: min(calc(100% - 4rem), 2200px);
+  min-height: calc(100vh - 4rem);
+  border-radius: 36px;
+  margin: 2rem auto;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  zoom: 0.82;
 
   background:
     radial-gradient(ellipse 90% 70% at 15% 15%, rgba(180, 210, 255, 0.85) 0%, transparent 52%),
@@ -434,4 +434,13 @@
 
 @media (prefers-reduced-motion: reduce) {
   .wc-orb-one, .wc-orb-two, .wc-orb-three, .wc-hospital-shimmer { animation: none; }
+}
+
+@media (max-width: 900px) {
+  .wc-shell {
+    width: min(calc(200% - 5rem), 1400px);
+    min-height: calc(100vh - 2rem);
+    margin: 1rem auto;
+    border-radius: 22px;
+  }
 }

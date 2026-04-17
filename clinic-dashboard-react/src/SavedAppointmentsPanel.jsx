@@ -22,6 +22,7 @@ export default function SavedAppointmentsPanel({ appointments, onDeleteAppointme
                   event.preventDefault()
                   onViewAppointment(item, 'savedAppointments')
                 }
+                
               }}
             >
               <div>

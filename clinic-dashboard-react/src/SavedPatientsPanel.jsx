@@ -28,15 +28,15 @@ export default function SavedPatientsPanel({ patients, onDeletePatient }) {
                   <button type="button" disabled title="Saved records cannot be edited.">
                     Locked
                   </button>
-                  <button
-                    type="button"
-                    className="danger-button"
-                    onClick={() => onDeletePatient(patient.MOBILE)}
-                    disabled={!patient.CAN_DELETE}
-                    title={patient.CAN_DELETE ? 'Delete your own patient record' : 'You can only delete your own records'}
-                  >
-                    Delete
-                  </button>
+                  {localStorage.getItem('role') === 'admin' && (
+                    <button
+                      type="button"
+                      className="danger-button"
+                      onClick={() => onDeletePatient(patient.MOBILE)}
+                    >
+                      Delete
+                    </button>
+                  )}
                 </span>
               </div>
             ))
