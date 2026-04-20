@@ -477,9 +477,6 @@ function App() {
           <h1>Clinic Overview</h1>
           <p className="lead">A quick look at today&apos;s patients and appointments.</p>
           <div className="jump-row" aria-label="Quick navigation">
-            {/* <button type="button" className="jump-button jump-button-active" onClick={() => navigateToView('dashboard')}>
-              Overview
-            </button> */}
             <button type="button" className="jump-button" onClick={() => navigateToView('welcome')}>
               Home
             </button>
@@ -578,9 +575,6 @@ function App() {
             <button type="button" className="jump-button jump-button-active" onClick={() => navigateToView('patients')}>
               Patients
             </button>
-            {/* <button type="button" className="jump-button" onClick={() => navigateToView('appointments')}>
-              Appointments
-            </button> */}
           </div>
           <p className="kicker">Patients</p>
           <h1>Patient Details</h1>
@@ -673,15 +667,6 @@ function App() {
             Back to Overview
           </button>
           <div className="jump-row jump-row-tight" aria-label="Quick navigation">
-            {/* <button type="button" className="jump-button jump-button-active" onClick={() => navigateToView('savedPatients')}>
-              Saved Patients
-            </button> */}
-            {/* <button type="button" className="jump-button" onClick={() => navigateToView('patients')}>
-              Patient Form
-            </button>
-            <button type="button" className="jump-button" onClick={() => navigateToView('appointments')}>
-              Appointments
-            </button> */}
             <button type="button" className="jump-button" onClick={() => navigateToView('welcome')}>
               Home page
             </button>
@@ -715,15 +700,6 @@ function App() {
             Back to Overview
           </button>
           <div className="jump-row jump-row-tight" aria-label="Quick navigation">
-            {/* <button type="button" className="jump-button jump-button-active" onClick={() => navigateToView('savedAppointments')}>
-              Saved Appointments
-            </button> */}
-            {/* <button type="button" className="jump-button" onClick={() => navigateToView('appointments')}>
-              Book Appointment
-            </button>
-            <button type="button" className="jump-button" onClick={() => navigateToView('patients')}>
-              Patients
-            </button> */}
             <button type="button" className="jump-button" onClick={() => navigateToView('welcome')}>
               Home page
             </button>
@@ -767,9 +743,6 @@ function App() {
             Back to Overview
           </button>
           <div className="jump-row jump-row-tight" aria-label="Quick navigation">
-            {/* <button type="button" className="jump-button" onClick={() => navigateToView('patients')}>
-              Patients
-            </button> */}
             <button type="button" className="jump-button jump-button-active" onClick={() => navigateToView('appointments')}>
               Appointments
             </button>
