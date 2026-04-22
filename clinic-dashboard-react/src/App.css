@@ -1,22 +1,3 @@
-.page {
-  min-height: 100vh;
-  padding: 3rem 1.2rem;
-  position: relative;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(145deg, #eef4ff 0%, #e8f0ff 42%, #f2ecff 76%, #edf8f4 100%);
-  background-size: 180% 180%;
-  animation: pageDrift 18s ease-in-out infinite alternate;
-}
-
-.page-welcome {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
 .shell {
   width: min(100%, 1300px);
   margin-inline: auto;
@@ -77,7 +58,6 @@
     transform: none;
   }
 
-  .page,
   .shell,
   .shell-dashboard,
   .shell-dashboard::after,
@@ -87,93 +67,6 @@
   .grid,
   .stats {
     animation: none;
-  }
-}
-
-@keyframes pageDrift {
-  0% {
-    background-position: 0% 50%;
-  }
-
-  100% {
-    background-position: 100% 50%;
-  }
-}
-
-@keyframes blobFloatOne {
-  0% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-
-  100% {
-    transform: translate3d(24px, 28px, 0) scale(1.08);
-  }
-}
-
-@keyframes blobFloatTwo {
-  0% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-
-  100% {
-    transform: translate3d(-26px, -18px, 0) scale(1.1);
-  }
-}
-
-@keyframes shellEnter {
-  from {
-    opacity: 0;
-    transform: translateY(26px) scale(0.98);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes contentRise {
-  from {
-    opacity: 0;
-    transform: translateY(18px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes dashboardGlow {
-  0% {
-    transform: translate3d(-1%, -1%, 0) scale(1);
-  }
-
-  100% {
-    transform: translate3d(1.5%, 1%, 0) scale(1.04);
-  }
-}
-
-@keyframes dashboardSweep {
-  0% {
-    transform: translate3d(-2%, -1%, 0) rotate(-2deg);
-    opacity: 0.58;
-  }
-
-  100% {
-    transform: translate3d(2%, 1%, 0) rotate(2deg);
-    opacity: 0.88;
-  }
-}
-
-@keyframes dashboardFloat {
-  0%,
-  100% {
-    transform: translateY(-6px) rotateX(7deg) rotateY(-10deg);
-  }
-
-  50% {
-    transform: translateY(-12px) rotateX(9deg) rotateY(-8deg);
   }
 }
 
@@ -257,30 +150,6 @@
   50% {
     transform: scale(1.1);
     opacity: 1;
-  }
-}
-
-@keyframes activeButtonPulse {
-  0%,
-  100% {
-    transform: translateY(0);
-    box-shadow: 0 8px 18px rgba(49, 46, 129, 0.16);
-  }
-
-  50% {
-    transform: translateY(-2px);
-    box-shadow: 0 14px 24px rgba(49, 46, 129, 0.24);
-  }
-}
-
-@keyframes heroVisualSway {
-  0%,
-  100% {
-    transform: translateY(0) rotate(0deg);
-  }
-
-  50% {
-    transform: translateY(-4px) rotate(0.22deg);
   }
 }
 
@@ -731,7 +600,6 @@
 }
 
 .summary-card span,
-.mini-table span,
 .snapshot-list p {
   display: block;
   color: #5d768a;
@@ -743,7 +611,7 @@
 
 .summary-card strong,
 .snapshot-list strong,
-.mini-table strong {
+.snapshot-list strong {
   color: #12344d;
   font: 700 1rem/1.35 var(--font-body);
 }
@@ -759,11 +627,6 @@
   padding: 1.35rem;
   border: 1px solid;
   text-align: left;
-}
-
-.detail-panel-blue {
-  background: #eef5ff;
-  border-color: #c9ddfb;
 }
 
 .detail-panel-green {
@@ -905,40 +768,6 @@
   background: #fff4f4;
   border-color: #f0c7c7;
   color: #9e2f2f;
-}
-
-.global-signout-btn {
-  position: fixed;
-  top: 1rem;
-  right: 1rem;
-  z-index: 9999;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.78);
-  padding: 0.62rem 1rem;
-  font: 700 0.84rem/1 var(--font-body);
-  color: #113a59;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.36)),
-    linear-gradient(135deg, rgba(23, 102, 255, 0.14), rgba(16, 185, 129, 0.12));
-  -webkit-backdrop-filter: blur(20px) saturate(170%);
-  backdrop-filter: blur(20px) saturate(170%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    0 10px 22px rgba(15, 23, 42, 0.18);
-  cursor: pointer;
-  transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
-}
-
-.global-signout-btn:hover {
-  transform: translateY(-1px);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    0 14px 28px rgba(15, 23, 42, 0.24);
-}
-
-.global-signout-btn:focus-visible {
-  outline: 2px solid rgba(23, 102, 255, 0.5);
-  outline-offset: 2px;
 }
 
 .auth-shell {
@@ -1151,34 +980,6 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.38);
 }
 
-.auth-banner {
-  position: fixed;
-  top: 1rem;
-  right: 1rem;
-  z-index: 30;
-  display: flex;
-  align-items: center;
-  gap: 0.8rem;
-  padding: 0.7rem 0.9rem;
-  border-radius: 999px;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.66), rgba(255, 255, 255, 0.28)),
-    rgba(255, 255, 255, 0.18);
-  border: 1px solid rgba(255, 255, 255, 0.86);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  backdrop-filter: blur(20px) saturate(180%);
-  box-shadow:
-    0 18px 36px rgba(5, 12, 36, 0.16),
-    inset 0 1px 0 rgba(255, 255, 255, 0.94),
-    inset 0 -10px 22px rgba(255, 255, 255, 0.16);
-  color: #12344d;
-  font: 700 0.9rem/1 var(--font-body);
-}
-
-.auth-banner span {
-  white-space: nowrap;
-}
-
 @keyframes authFloatOne {
   0% {
     transform: translate3d(0, 0, 0) scale(1);
@@ -1214,20 +1015,6 @@
 
 .snapshot-list strong {
   font-size: 0.98rem;
-}
-
-.mini-table {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.8rem;
-  margin-top: 1rem;
-}
-
-.mini-table > div {
-  border-radius: 16px;
-  padding: 0.9rem;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid #e4dcc7;
 }
 
 .sidebar-note {
@@ -1390,22 +1177,10 @@
   }
 
   .top-summary,
-  .mini-table,
   .record-form,
   .hero-grid,
   .recent-list {
     grid-template-columns: 1fr;
-  }
-
-  .auth-banner {
-    left: 1rem;
-    right: 1rem;
-    justify-content: space-between;
-    border-radius: 18px;
-  }
-
-  .auth-banner span {
-    white-space: normal;
   }
 
   .section-heading,
@@ -1422,28 +1197,6 @@
   .appointment-meta {
     justify-items: start;
   }
-}
-
-.page-dashboard {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.page-detail {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.page-dashboard > .shell,
-.page-detail > .shell {
-  width: min(100%, 1300px);
-  margin-inline: auto;
-}
-
-.page-dashboard > .shell {
-  padding: 1.1rem;
 }
 
 .overview-glass {
@@ -1541,11 +1294,6 @@
 .overview-like .detail-panel:hover {
   transform: translateY(-4px);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 20px 36px rgba(15, 23, 42, 0.16), 0 8px 16px rgba(79, 70, 229, 0.1);
-}
-
-.overview-like .detail-panel-blue {
-  background: rgba(241, 245, 255, 0.88);
-  border-color: rgba(188, 199, 255, 0.92);
 }
 
 .overview-like .detail-panel-green {
